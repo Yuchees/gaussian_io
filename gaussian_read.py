@@ -106,7 +106,7 @@ class GaussianOut(Header):
                            sum_reader=False)
         self.__link_range = []
         self.__index = []
-        self.__sum_out = []
+        self.__summary = []
         self.__opt_steps = []
         self.__freq = []
         self.__cpu_time = []
@@ -174,13 +174,13 @@ class GaussianOut(Header):
         """
         if not self.status['sum_reader']:
             self.parser_sum()
-        return self.__sum_out[0]['Version']
+        return self.__summary[0]['Version']
 
     @property
     def sum_params(self):
         if not self.status['sum_reader']:
             self.parser_sum()
-        return self.__sum_out[0].keys()
+        return self.__summary[0].keys()
 
     def final_coordinates(self, link=0):
         """
@@ -193,12 +193,12 @@ class GaussianOut(Header):
         """
         if not self.status['sum_reader']:
             self.parser_sum()
-        return self.__sum_out[link]['coordinates']
+        return self.__summary[link]['coordinates']
 
     def final_params(self, param, link=0):
         if not self.status['sum_reader']:
             self.parser_sum()
-        res = self.__sum_out[link][param]
+        res = self.__summary[link][param]
         return res
 
     def __str__(self):
@@ -310,7 +310,7 @@ class GaussianOut(Header):
                     liter_list = []
                     for index in link_range:
                         if re.match(
-                                r' +((Input)|(Standard)) orientation: +',
+                                r' +Input orientation: +',
                                 self.__lines[index]
                         ):
                             liter_list.append(index)
@@ -332,20 +332,20 @@ class GaussianOut(Header):
         """
         assert self.status['parser'], 'Run parser function first.'
         for i in range(len(self.__link_range)):
-            self.__sum_out.append({})
+            self.__summary.append({})
             sum_line = ''
             for index in self.__index[i]['sum']:
                 sum_line += self.__lines[index].strip()
             sum_components = sum_line.split('\\\\')
             assert len(sum_components) >= 5
-            self.__sum_out[i]['sys_info'] = sum_components[0]
+            self.__summary[i]['sys_info'] = sum_components[0]
             coordinates = sum_components[3].split('\\')
-            self.__sum_out[i]['coordinates'] = coordinates[1:]
+            self.__summary[i]['coordinates'] = coordinates[1:]
             rest_result = sum_components[4].split('\\')
             for item in rest_result:
                 if '=' in item:
                     com = item.split('=')
-                    self.__sum_out[i][com[0]] = com[1]
+                    self.__summary[i][com[0]] = com[1]
         self.status['sum_reader'] = True
 
     def parser_cpu_time(self):
@@ -369,6 +369,13 @@ class GaussianOut(Header):
                 self.__cpu_time.append(time_compile(self.__lines[index[0]]))
                 self.__elapsed_time.append(time_compile(self.__lines[index[1]]))
 
+    def parser_optimisation(self, link=0):
+        for step in self.__index[link]['opt_steps']:
+            step_segnment = []
+            first_atom_index = step[0] + 4
+            # TODO: optimisation
+        pass
+
     def freq_reader(self):
         """
         Parse the frequency section
@@ -381,10 +388,10 @@ class GaussianOut(Header):
 
 if __name__ == '__main__':
     # Test script
-    with open('../../dye_copolymer/test/out/D2_A18_pi1_An3.out') as file:
+    with open('./test/A2_pi4.out') as file:
         lines = file.readlines()
-    test_out_file = GaussianOut(out_lines=lines, name='D8_A18_pi9_An12')
-    test_out_file.parser()
+    test_out_file = GaussianOut(out_lines=lines, name='A2_pi4')
+    test_out_file.parser(opt=True)
     test_out_file.parser_sum()
     test_out_file.header_reader()
     test_out_file.parser_cpu_time()
