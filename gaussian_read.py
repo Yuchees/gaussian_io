@@ -93,8 +93,8 @@ class GaussianOut(Header):
         """
         Class for reading all Gaussian out-put file details.
 
-        :param out_lines: Python read lines result
-        :param name: The name of read gaussian job
+        :param out_lines: list of lines from the output file
+        :param name: The name of read gaussian file
         :type out_lines: list
         :type name: str
         """
@@ -102,7 +102,7 @@ class GaussianOut(Header):
         self.__name = name
         self.__lines = out_lines
         self.__len = len(self.__lines)
-        self.status = dict(finished=True, error_type=False, parser=False,
+        self.status = dict(finished=True, error_type=False, basis_parser=False,
                            sum_reader=False)
         self.__link_range = []
         self.__index = []
@@ -137,7 +137,7 @@ class GaussianOut(Header):
             time_type in ['cpu', 'elapsed'], 'Time type must be cpu or elapsed.'
         time = None
         if not self.status['sum_reader']:
-            self.cpu_time_reader()
+            self.parser_cpu_time()
         if time_type == 'cpu':
             time = self.__cpu_time[link]
         elif time_type == 'elapsed':
@@ -147,7 +147,7 @@ class GaussianOut(Header):
     @property
     def error(self):
         """
-        Get error type
+        Get the error type
 
         :return: Error bool or name
         :rtype: bool or str
@@ -167,19 +167,19 @@ class GaussianOut(Header):
     @property
     def version(self):
         """
-        Get Gaussian version
+        Get the Gaussian version
 
         :return: Version name
         :rtype: str
         """
         if not self.status['sum_reader']:
-            self.sum_reader()
+            self.parser_sum()
         return self.__sum_out[0]['Version']
 
     @property
     def sum_params(self):
         if not self.status['sum_reader']:
-            self.sum_reader()
+            self.parser_sum()
         return self.__sum_out[0].keys()
 
     def final_coordinates(self, link=0):
@@ -192,12 +192,12 @@ class GaussianOut(Header):
         :rtype: list
         """
         if not self.status['sum_reader']:
-            self.sum_reader()
+            self.parser_sum()
         return self.__sum_out[link]['coordinates']
 
     def final_params(self, param, link=0):
         if not self.status['sum_reader']:
-            self.sum_reader()
+            self.parser_sum()
         res = self.__sum_out[link][param]
         return res
 
@@ -206,6 +206,11 @@ class GaussianOut(Header):
     # __repr__ = __str__
 
     def header_reader(self):
+        """
+
+
+        :return:
+        """
         assert self.status['parser'], 'Run parser function first.'
         i = 0
         for link_index in self.__index:
@@ -224,7 +229,15 @@ class GaussianOut(Header):
 
     @staticmethod
     def __list_to_list_range(index_list):
-        assert len(index_list) > 1, 'The length of list must greater than 1.'
+        """
+        Convert a list of boundaries into a list of range objects.
+
+        :param index_list: The list contain all boundaries for ranges
+        :type index_list: list
+        :return: A list within range objects
+        :rtype: list
+        """
+        assert len(index_list) > 1, 'The list contain at list 2 boundaries.'
         list_range = []
         for i in range(len(index_list) - 1):
             start = index_list[i]
@@ -311,7 +324,12 @@ class GaussianOut(Header):
                 link += 1
         self.status['parser'] = True
 
-    def sum_reader(self):
+    def parser_sum(self):
+        """
+        Parse the summary section
+
+        :return: None
+        """
         assert self.status['parser'], 'Run parser function first.'
         for i in range(len(self.__link_range)):
             self.__sum_out.append({})
@@ -330,7 +348,12 @@ class GaussianOut(Header):
                     self.__sum_out[i][com[0]] = com[1]
         self.status['sum_reader'] = True
 
-    def cpu_time_reader(self):
+    def parser_cpu_time(self):
+        """
+        Parse the CPU time section
+
+        :return: None
+        """
         assert self.status['parser'], 'Run parser function first.'
 
         def time_compile(time_line):
@@ -347,17 +370,23 @@ class GaussianOut(Header):
                 self.__elapsed_time.append(time_compile(self.__lines[index[1]]))
 
     def freq_reader(self):
+        """
+        Parse the frequency section
+
+        :return: None
+        """
         # TODO: frequency reader function
         pass
 
 
 if __name__ == '__main__':
-    with open('/home/yu/SSD/output_PM7_IP_EA/dyes_tetramer/dyes_tetramer_out/D8_A18_pi9_An12.out') as file:
+    # Test script
+    with open('../../dye_copolymer/test/out/D2_A18_pi1_An3.out') as file:
         lines = file.readlines()
-    s = GaussianOut(out_lines=lines, name='D8_A18_pi9_An12')
-    s.parser()
-    s.sum_reader()
-    s.header_reader()
-    s.cpu_time_reader()
-    s.final_params(param='HF')
-    print('Error type: ', s.error)
+    test_out_file = GaussianOut(out_lines=lines, name='D8_A18_pi9_An12')
+    test_out_file.parser()
+    test_out_file.parser_sum()
+    test_out_file.header_reader()
+    test_out_file.parser_cpu_time()
+    test_out_file.final_params(param='HF')
+    print('Error type: ', test_out_file.error)
