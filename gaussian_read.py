@@ -4,8 +4,8 @@
 Gaussian 16 input and output files preparation.
 @author: Yu Che
 """
-import re
 import datetime
+import re
 import warnings
 
 
@@ -306,6 +306,7 @@ class GaussianOut(Header):
                         break
                 self.__index[link]['sum'] = range(sum_start, sum_end)
                 # Determine each optimisation step slice
+                # TODO: Merge the inverse loop and delete the step slices
                 if opt:
                     liter_list = []
                     for index in link_range:
@@ -370,11 +371,32 @@ class GaussianOut(Header):
                 self.__elapsed_time.append(time_compile(self.__lines[index[1]]))
 
     def parser_optimisation(self, link=0):
-        for step in self.__index[link]['opt_steps']:
-            step_segnment = []
-            first_atom_index = step[0] + 4
-            # TODO: optimisation
-        pass
+        """
+
+        :param link:
+        :type link: int
+        :return: None
+        """
+        coordinate_start, coordinate_end, energy = 0, 0, 0
+        for index in self.__index[link]['opt_steps']:
+            if re.match(r' -+ ', self.__lines[index]) and \
+                    re.match(r' +Input orientation:', self.__lines[index - 4]):
+                coordinate_start = index + 1
+            if re.match(r' -+ ', self.__lines[index]) and \
+                    re.match(r' +Distance matrix', self.__lines[index + 1]):
+                coordinate_end = index - 1
+            if re.match(r' SCF Done:', self.__lines[index]):
+                energy = self.__lines[index].split(' ')[5]
+            # TODO: converge energy string into float
+            if re.match(r'Converged?', self.__lines[index]):
+                converge_lines = self.__lines[index + 1: index + 5]
+                step_segments = [
+                    self.__lines[coordinate_start: coordinate_end],
+                    energy,
+                    converge_lines
+                ]
+                self.__opt_steps.append(step_segments)
+            # TODO: optimisation need to be test
 
     def freq_reader(self):
         """
@@ -393,6 +415,7 @@ if __name__ == '__main__':
     test_out_file = GaussianOut(out_lines=lines, name='A2_pi4')
     test_out_file.parser(opt=True)
     test_out_file.parser_sum()
+    test_out_file.parser_optimisation()
     test_out_file.header_reader()
     test_out_file.parser_cpu_time()
     test_out_file.final_params(param='HF')
