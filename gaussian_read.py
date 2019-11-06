@@ -245,13 +245,11 @@ class GaussianOut(Header):
             list_range.append(range(start, end))
         return list_range
 
-    def parser(self, opt=False, freq=False):
+    def parser(self, freq=False):
         """
         Parser for Gaussian 16 out put files
 
-        :param opt: whether to read the optimisation steps
         :param freq: weather to read the frequency calculation
-        :type opt: bool
         :type freq: bool
         :return: None
         """
@@ -305,23 +303,6 @@ class GaussianOut(Header):
                         sum_start = index
                         break
                 self.__index[link]['sum'] = range(sum_start, sum_end)
-                # Determine each optimisation step slice
-                # TODO: Merge the inverse loop and delete the step slices
-                if opt:
-                    liter_list = []
-                    for index in link_range:
-                        if re.match(
-                                r' +Input orientation: +',
-                                self.__lines[index]
-                        ):
-                            liter_list.append(index)
-                        elif self.__lines[index].startswith(
-                                ' Optimization completed.'
-                        ):
-                            liter_list.append(index + 1)
-                            break
-                    self.__index[link]['opt_steps'] = \
-                        self.__list_to_list_range(liter_list)
                 link += 1
         self.status['parser'] = True
 
@@ -370,15 +351,9 @@ class GaussianOut(Header):
                 self.__cpu_time.append(time_compile(self.__lines[index[0]]))
                 self.__elapsed_time.append(time_compile(self.__lines[index[1]]))
 
-    def parser_optimisation(self, link=0):
-        """
-
-        :param link:
-        :type link: int
-        :return: None
-        """
+    def parser_optimisation(self):
         coordinate_start, coordinate_end, energy = 0, 0, 0
-        for index in self.__index[link]['opt_steps']:
+        for index in self.__link_range:
             if re.match(r' -+ ', self.__lines[index]) and \
                     re.match(r' +Input orientation:', self.__lines[index - 4]):
                 coordinate_start = index + 1
@@ -396,7 +371,7 @@ class GaussianOut(Header):
                     converge_lines
                 ]
                 self.__opt_steps.append(step_segments)
-            # TODO: optimisation need to be test
+        # TODO: optimisation need to be test
 
     def freq_reader(self):
         """
