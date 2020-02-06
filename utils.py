@@ -3,15 +3,41 @@
 
 import os
 import re
-from .gaussian_read import GaussianOut
+import warnings
+from pathlib import Path
+from gaussian import GaussianOut
+from header import Header
 
 
-def read_out(out_path):
-    name = __path_test(out_path, file_type='.out')
+def read_out(path):
+    out_path = Path(path)
+    assert out_path.suffix is '.out', \
+        'The given file is not an .out, got{} instead.'.format(out_path.suffix)
+    link_id = []
     with open(out_path, 'r') as output_file:
         lines = output_file.readlines()
-    mol = GaussianOut(out_lines=lines, name=name)
-    return mol
+    # Check if there are links in this out file
+    for i in range(len(lines)):
+        if lines[i].startswith(' Initial command:'):
+            link_id.append(i)
+    link_id.append(len(lines))
+    # Return an object if no link in this file
+    if len(link_id) == 2:
+        return GaussianOut(out_lines=lines, name=out_path.stem)
+    # Return a list of object after splitting the out file
+    else:
+        warnings.warn(
+            'There are {} of links in this out-file, '
+            'return a list of GaussianOut objects'.format(len(link_id) - 1),
+            ResourceWarning
+        )
+        g16_out = []
+        for j in range(len(link_id) - 1):
+            g16_out.append(
+                GaussianOut(out_lines=lines[link_id[j]: link_id[j + 1]],
+                            name=out_path.stem)
+            )
+        return g16_out
 
 
 def read_in(in_path):
@@ -19,6 +45,19 @@ def read_in(in_path):
     with open(in_path, 'r') as input_file:
         lines = input_file.readlines()
     return GaussianOut(out_lines=lines, name=name)
+
+
+def read_header(header_path):
+    headers = []
+    links = [0]
+    with open(header_path, 'r') as header_file:
+        lines = header_file.readlines()
+    for line_id, line in enumerate(lines):
+        link = 0
+        if line.startswith('--'):
+            links.append(line_id)
+            headers.append(Header(line[links[link]: links[link+1]]))
+    return headers
 
 
 def __path_test(test_path, file_type):
@@ -48,19 +87,19 @@ def coordinates_reader(line_list):
     return coordinates
 
 
-def write_xyz(out_put_coordinates, xyz_path, comments):
-    coordinates_list = coordinates_reader(out_put_coordinates)
-    coordinate_lines = []
-    for segments in coordinates_list:
+def write_xyz(coord, xyz_path, comments):
+    coord_list = coordinates_reader(coord)
+    coord_lines = []
+    for segments in coord_list:
         coordinate_line = '{}{:>20.10f}{:>20.10f}{:>20.10f}\n'.format(
             segments[0],
             segments[1],
             segments[2],
             segments[3]
         )
-        coordinate_lines.append(coordinate_line)
-    xyz_lines = ['{}\n'.format(len(coordinates_list)),
-                 '{}\n'.format(comments)] + coordinate_lines
+        coord_lines.append(coordinate_line)
+    xyz_lines = ['{}\n'.format(len(coord_list)),
+                 '{}\n'.format(comments)] + coord_lines
     with open(xyz_path, 'w') as mol_file:
         mol_file.writelines(xyz_lines)
 
@@ -79,7 +118,6 @@ def write_xyz(out_put_coordinates, xyz_path, comments):
 """
 
 if __name__ == '__main__':
-    # path = '../../dye_copolymer/test/output_PM7_opt/dyes_tetramer/dyes_tetramer_out/D10_A12_pi5_An3.out'
-    path = '../../../SSD/output_PM7_opt/dyes_tetramer/dyes_tetramer_out'
-    # read_write_all(path)
+    path1 = './test/A1_pi1_IPEA.out'
+    a = read_out(path1)
     print('finished')
