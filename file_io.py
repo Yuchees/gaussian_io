@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Gaussian 16 input and output files preparation.
+Gaussian 16 files io for array job on barkla.
 @author: Yu Che
 """
 import os

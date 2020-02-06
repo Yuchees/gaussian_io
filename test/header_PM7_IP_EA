@@ -1,0 +1,24 @@
+%mem=32GB
+%nprocshared=4
+%Chk=/users/psyche/volatile/gaussian/chk/PM7_IP_EA/A1_pi1.chk
+# PM7
+# Geom=Checkpoint
+# SCRF=(SMD,Solvent=Acetonitrile) SCF=(YQC,MaxCycle=500,FullDiagonalization)
+# Integral=(Grid=UltraFineGrid) CPHF=(MaxInv=20000)
+
+IP of neutral geometry
+
++1 2
+
+--Link1--
+%mem=32GB
+%nprocshared=4
+%Chk=/users/psyche/volatile/gaussian/chk/PM7_IP_EA/A1_pi1.chk
+# PM7
+# Geom=Checkpoint
+# SCRF=(SMD,Solvent=Acetonitrile) SCF=(YQC,MaxCycle=500,FullDiagonalization)
+# Integral=(Grid=UltraFineGrid) CPHF=(MaxInv=20000)
+
+EA of neutral geometry
+
+-1 2

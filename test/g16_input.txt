@@ -1,0 +1,47 @@
+%mem=360GB
+%CPU=0-39
+%Chk=chkfile_P
+# wB97XD/Def2SVP Opt
+# SCRF=(SMD,Solvent=Water)
+# Integral=(Grid=UltraFineGrid)
+
+Molecule X; neutral
+
+0 1
+coords
+
+--------------------------------------------
+
+P+
+--------------------------------------------
+%mem=360GB
+%CPU=0-39
+%OldChk=../P/chkfile_P
+%Chk=chkfile_P+
+# wB97XD/Def2SVP
+# SCRF=(SMD,Solvent=Water)
+# Geom=Checkpoint Guess=Read
+# Integral=(Grid=UltraFineGrid)
+
+Molecule X; charged
+
++1 2
+
+--------------------------------------------
+
+P-
+--------------------------------------------
+%mem=360GB
+%CPU=0-39
+%OldChk=../P/chkfile_P
+%Chk=chkfile_P-
+# wB97XD/Def2SVP
+# SCRF=(SMD,Solvent=Water)
+# Geom=Checkpoint Guess=Read
+# Integral=(Grid=UltraFineGrid)
+
+Molecule X; charged
+
+-1 2
+
+--------------------------------------------
