@@ -6,105 +6,104 @@ Gaussian 16 input and output files preparation.
 """
 import re
 import warnings
+from pathlib import Path
 from datetime import datetime, timedelta
 
-from header import Header
+from .header import Header
+from .utils import coordinates_reader
 
 
-class GaussianIn:
-    def __init__(self):
-        self.__header_status = False
-        self.__header = dict(
-            mem='8GB', nprocshared=2,
-            Chk='/users/psyche/volatile/gaussian/',
-            comments='',
-            Charge=0,
-            Multiplicity=1
-        )
-
-    @property
-    def header_status(self):
-        return self.__header_status
+class GaussianIn(Header):
+    def __init__(self, in_lines):
+        header_lines = coord_lines = []
+        for index, line in enumerate(in_lines):
+            if line == '\n':
+                header_lines = in_lines[:index+4]
+                coord_lines = in_lines[index+4:-1]
+                break
+        super().__init__(header_lines)
+        self._coord = coordinates_reader(coord_lines, ftype='xyz')
+        self._name = ''
 
     @property
-    def header(self):
-        if self.__header_status:
-            return self.__header
-        else:
-            raise NotImplementedError('Header has not been read or defined.')
-
-    @header.setter
-    def header(self, value):
-        if type(value) == dict:
-            self.__header = value
-        else:
-            raise TypeError('')
+    def coord(self):
+        return self._coord
 
     @property
-    def header_param(self, *args):
-        if self.__header_status:
-            for key in args:
-                print('{:>4}: {}'.format(key, self.__header[key]))
-        else:
-            raise NotImplementedError('Header has not been read or defined.')
+    def mol_name(self):
+        return self._name
 
-    def read(self, header_lines):
+    @property
+    def mol_is_loaded(self):
+        if len(self._coord) == 0:
+            return False
+        else:
+            return True
+
+    def update_mol(self, mol_path):
         """
+        Update the molecular geometry from the given file
 
         Parameters
         ----------
-        header_lines: list of str
+        mol_path: str
+            The path of given molecular file
+        Returns
+        -------
+        None
+        """
+        path = Path(mol_path)
+        self._name = path.name
+        assert path.suffix in ['.xyz', '.mol', '.mol2'], ''
+        with open(path, 'r') as file:
+            mol_l = file.readlines()
+        if path.suffix is '.mol':
+            coord_lines = mol_l[2:]
+        elif path.suffix is '.mol2':
+            coord_lines = mol_l[:]
+        else:
+            coord_lines = mol_l[2:]
+        self._coord = coordinates_reader(coord_lines, ftype=path.suffix)
+
+    def to_gjf(self, path=None):
+        """
+        Generate the Gaussian input file for current GaussianIn object
+
+        Parameters
+        ----------
+        path: str or None
+            The path where the input file will be saved in.
+            If None, return a list
 
         Returns
         -------
-
+        input_lines: list or None
+            A list of lines of generated input file
         """
-        link = []
-        for line_id, line in enumerate(header_lines):
-            if line.startswith('-'):
-                link.append(line)
-
-        """
-        # Read static lines
-        self.__header['comments'] = header_lines[-2]
-        charge_multiplicity = re.split(r' +', header_lines[-1])
-        self.__header['Charge'] = charge_multiplicity[2]
-        self.__header['Multiplicity'] = charge_multiplicity[5]
-        # Read variable lines and join them into one str
-        header_line = ''
-        for line in header_lines[:-2]:
-            if line.startswith('%'):
-                segments = re.split(r'[%=]', line)
-                self.__header[segments[1]] = segments[2]
-            else:
-                header_line += line
-        header_line = re.sub(r' # |# ', ' ', header_line)
-        header_line = re.sub(r', ', ',', header_line)
-        header_components = re.split(r' +', header_line)
-        for param in header_components[1:]:
-            if '=' in param:
-                segments = re.split(r'=', param, maxsplit=1)
-                self.__header[segments[0]] = segments[1]
-            else:
-                self.__header[param] = True
-        self.__header_status = True
-        """
-
-    def write(self):
-        template = [
-            '%mem={}\n'.format(self.__header['mem']),
-            '%nprocshared={}\n'.format(self.__header['nprocshared']),
-            '%Chk={}\n'.format(self.__header['Chk'])
-        ]
-        param_line = '#'
-        for key in self.__header.keys():
-            if ((self.__header[key] is None) or
-                    key in ['mem', 'Chk', 'nprocshared']):
-                pass
-            else:
-                param_line += ' {}={}'.format(key, self.__header[key])
-        param_line += '\n'
-        return template
+        input_lines = self.get_header()
+        coord_lines = []
+        sum_method = ''
+        for item in self.method:
+            sum_method += item
+        # G16 keywords geom ignore the given coordinates
+        if not re.search(r'geom', sum_method, re.IGNORECASE):
+            for segments in self._coord:
+                coordinate_line = '{}{:>20.10f}{:>20.10f}{:>20.10f}\n'.format(
+                    segments[0],
+                    segments[1],
+                    segments[2],
+                    segments[3]
+                )
+                coord_lines.append(coordinate_line)
+            input_lines += coord_lines
+        input_lines.append('\n')
+        if path is None:
+            return input_lines
+        else:
+            in_path = Path(path)
+            assert in_path.is_file(), 'Given path is not a file!'
+            with open(in_path, 'w') as input_file:
+                input_file.writelines(input_lines)
 
 
 class GaussianOut:
@@ -140,21 +139,15 @@ class GaussianOut:
         else:
             error_line = self._lines[-4]
             if error_line.startswith(' Error termination'):
-                error = re.split(r'[/.]', error_line)[-3][1:]
-                self._status['error_type'] = error
+                self._status['error_type'] = re.findall(r'g16/(.*)\.exe',
+                                                        error_line)[0]
             # If the file is a finished job and no error at the end.
             # Run the parser
             else:
-                self._parser()
+                self.parser()
 
     @property
     def cpu_time(self):
-        """
-        Get the time stamp
-
-        :return: Selected time
-        :rtype: datetime.timedelta
-        """
         return self._cpu_time
 
     @property
@@ -166,79 +159,47 @@ class GaussianOut:
         return self._date
 
     @property
-    def error(self):
-        """
-        Get the error type
-
-        :return: Error bool or name
-        :rtype: bool or str
-        """
-        return self._status['error_type']
-
-    @property
-    def finished(self):
-        """
-        Get the finished status
-
-        :return: Finished bool
-        :rtype: bool
-        """
-        return self._status['finished']
-
-    @property
     def header(self):
         return self._header
 
     @property
-    def version(self):
-        """
-        Get the Gaussian version
+    def error(self):
+        return self._status['error_type']
 
-        :return: Version name
-        :rtype: str
-        """
-        if not self._status['sum_reader']:
-            self.parser_sum()
-        return self._summary['Version']
+    @property
+    def finished(self):
+        return self._status['finished']
 
     @property
     def sum_params(self):
         if not self._status['sum_reader']:
             self.parser_sum()
-        return self._summary.keys()
+        return list(self._summary.keys())
 
     @property
     def coord(self):
-        """
-        Get the 3D coordinates in list
-
-        :return: Coordinates as a list
-        :rtype: list
-        """
         if not self._status['sum_reader']:
             self.parser_sum()
-        return self._summary['coordinates']
-
-    def get_params(self, param=None):
-        if not self._status['sum_reader']:
-            self.parser_sum()
-        if param is None:
-            return self._summary
-        else:
-            return self._summary[param]
-
-    def get_opt_step(self, step):
-        return self._opt_steps[step]
+        return coordinates_reader(self._summary['coordinates'], ftype='xyz')
 
     def __str__(self):
         print('GaussianOut object {}'.format(self._name))
     # __repr__ = __str__
 
-    def _parser(self):
-        """
-        Parser for Gaussian 16 out put files
+    @staticmethod
+    def _time_compiler(time_line):
+        time = list(map(float, re.findall(r'\d+\.?\d*', time_line)))
+        format_time = timedelta(days=time[0], hours=time[1],
+                                minutes=time[2], seconds=time[3])
+        return format_time
 
-        :return: None
+    def parser(self):
+        """
+        Parser the Header and time stamps section
+
+        Returns
+        -------
+        None
         """
         assert self._status['finished'], 'Unfinished Gaussian out job.'
         # Determine header slice
@@ -250,25 +211,30 @@ class GaussianOut:
                 header_end = index + 1
                 break
         self._index['header'] = range(header_start, header_end)
-        self.parser_header()
-        # Parser the date stamp
-        date = re.sub(r'\s+', '-',
-                      re.findall(r'at (.*)\.', self._lines[-1])[0])
-        self._date = datetime.strptime(date, '%a-%b-%d-%H:%M:%S-%Y')
+        self._parser_header()
         # Frequency calculation has an individual time stamp
         # time need to be count twice
         len_time = 1
-        if re.search(r'[Ff]req', self._header.method):
+        method = ''
+        for item in self._header.method:
+            method += item
+        if re.search(r'freq', method, re.IGNORECASE) and \
+                self._status['error_type']:
             len_time = 2
         for i in range(len(self._lines) - 1, 1, -1):
             # Finding the cpu and elapsed time line
             if self._lines[i].startswith(' Job cpu time:'):
-                self._cpu_time += self.time_compile(self._lines[i])
-                self._elapsed_time += self.time_compile(self._lines[i+1])
+                self._cpu_time += self._time_compiler(self._lines[i])
+                self._elapsed_time += self._time_compiler(self._lines[i + 1])
                 len_time -= 1
+            # Parser the date stamp
+            elif re.match(r' Error| Normal', self._lines[i]):
+                date = re.sub(r'\s+', '-',
+                              re.findall(r'at (.*)\.', self._lines[-1])[0])
+                self._date = datetime.strptime(date, '%a-%b-%d-%H:%M:%S-%Y')
             if len_time == 0:
                 break
-        if self._status['error_type'] is False:
+        if self.error is False:
             # Finding the summary slice
             sum_start, sum_end = 0, 0
             for index in range(len(self._lines) - 1, 1, -1):
@@ -280,19 +246,21 @@ class GaussianOut:
             self._index['sum'] = range(sum_start, sum_end)
         self._status['parser'] = True
 
-    def parser_header(self):
+    def _parser_header(self):
         """
         Parser header lines to a Header object
 
-        :return:
+        Returns
+        -------
+        None
         """
         header_lines = []
         header_seg = 0
         method_line = ''
         for index in self._index['header']:
-            if re.match(r' -+', self._lines[index]):
+            if re.match(r'\s-+\n', self._lines[index]):
                 header_seg += 1
-            elif re.match(r' %', self._lines[index]):
+            elif re.match(r'\s%', self._lines[index]):
                 header_lines.append(self._lines[index].strip())
             elif header_seg == 1:
                 method_line += self._lines[index].strip()
@@ -306,38 +274,19 @@ class GaussianOut:
                 break
         self._header = Header(header_lines=header_lines)
 
-    @staticmethod
-    def _list_to_list_range(index_list):
-        """
-        Convert a list of boundaries into a list of range objects.
-
-        :param index_list: The list contain all boundaries for ranges
-        :type index_list: list
-        :return: A list within range objects
-        :rtype: list
-        """
-        assert len(index_list) > 1, 'The list contain at list 2 boundaries.'
-        list_range = []
-        for i in range(len(index_list) - 1):
-            start = index_list[i]
-            end = index_list[i + 1]
-            list_range.append(range(start, end))
-        return list_range
-
-    @staticmethod
-    def time_compile(time_line):
-        time = list(map(float, re.findall(r'\d+\.?\d*', time_line)))
-        format_time = timedelta(days=time[0], hours=time[1],
-                                minutes=time[2], seconds=time[3])
-        return format_time
-
     def parser_sum(self):
         """
-        Parse the summary section
+        Parser the summary section
 
-        :return: None
+        Returns
+        -------
+        None
         """
-        assert self._status['parser'], 'Run parser function first.'
+        if self._status['parser']:
+            self.parser()
+        assert not self.error, 'Error {} found! Cannot get summary.'.format(
+            self.error
+        )
         sum_line = ''
         for index in self._index['sum']:
             sum_line += self._lines[index].strip()
@@ -354,13 +303,20 @@ class GaussianOut:
         self._status['sum_reader'] = True
 
     def parser_optimisation(self):
+        """
+        Parser optimisation steps
+
+        Returns
+        -------
+        None
+        """
         coordinate_start, coordinate_end, energy = 0, 0, 0
         for index, line in enumerate(self._lines):
             if re.match(r' -+\n', line) and \
                     re.search(r' +Input orientation:', self._lines[index - 4]):
                 coordinate_start = index + 1
-            if re.match(r' -+\n', line) and \
-                    re.search(r' +Distance matrix', self._lines[index + 1]):
+            elif re.match(r' -+\n', line) and \
+                    coordinate_start != 0 and coordinate_end == 0:
                 coordinate_end = index
             if re.match(r' SCF Done:', line):
                 energy = float(re.split(r'\s+', line.strip())[4])
@@ -371,16 +327,45 @@ class GaussianOut:
                     energy=energy,
                     converge=converge_lines
                 )
+                coordinate_start = coordinate_end = 0
                 self._opt_steps.append(step_segments)
+
+    def get_params(self, param=None):
+        """
+        Get the parameter value from the summary section
+
+        Parameters
+        ----------
+        param: str
+
+        Returns
+        -------
+        str
+        """
+        if not self._status['sum_reader']:
+            self.parser_sum()
+        if param is None:
+            return self._summary
+        else:
+            return self._summary[param]
+
+    def get_opt_step(self, step):
+        return self._opt_steps[step]
 
 
 if __name__ == '__main__':
     # Test script
-    from utils import coordinates_reader, write_xyz
-    with open('./test/A2_pi4.out') as file:
-        lines = file.readlines()
+    from file_io import write_xyz
+    with open('./test/D2_A18_pi1_An3.out', 'r') as out:
+        lines = out.readlines()
     test_out_file = GaussianOut(out_lines=lines, name='A2_pi4')
     test_out_file.parser_sum()
     test_out_file.parser_optimisation()
-    a = coordinates_reader(line_list=test_out_file.coord)
+    a = test_out_file.get_opt_step(step=2)
+    write_xyz(coord=test_out_file.coord,
+              xyz_path='./test/test.xyz', comments='test')
+    with open('./test/A5_pi12.gjf', 'r') as gif_file:
+        gif_lines = gif_file.readlines()
+    h = GaussianIn(gif_lines)
+    input_test = h.to_gjf()
     print('Error type: ', test_out_file.error)
