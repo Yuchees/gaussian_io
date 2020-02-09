@@ -9,6 +9,22 @@ import re
 
 
 class Header:
+    """
+    Parser for Gaussian16 input and output file header section
+
+    Parameters
+    ----------
+    header_lines: list
+
+    Attributes
+    ----------
+    sys: dict
+    method: str
+    comments: str
+    charge: int
+    multiplicity: {1, 2}
+
+    """
     def __init__(self, header_lines):
         self.sys = {}
         self.method = ''
@@ -27,6 +43,7 @@ class Header:
 
     def _read_header(self, job_lines):
         """
+        Parse the header lines
 
         Parameters
         ----------
@@ -52,6 +69,14 @@ class Header:
                 break
 
     def get_header(self):
+        """
+        Generate the header information to a standard Gaussian input file
+
+        Returns
+        -------
+        list:
+            A list of input file lines
+        """
         header_lines = []
         for key, value in self.sys.items():
             header_lines.append(self._sys_line(key, value))
