@@ -85,7 +85,7 @@ def read_in(path):
     link_id.append(len(lines))
     # No link inside
     if len(link_id) == 2:
-        return GaussianIn(in_lines=lines)
+        return GaussianIn(in_lines=lines, name=in_path.name)
     # Link is detected
     else:
         warnings.warn(
@@ -95,7 +95,8 @@ def read_in(path):
         g16_in = []
         for j in range(len(link_id) - 1):
             g16_in.append(
-                GaussianIn(in_lines=lines[link_id[j]: link_id[j + 1]])
+                GaussianIn(in_lines=lines[link_id[j]: link_id[j + 1]],
+                           name=in_path.name)
             )
         return g16_in
 

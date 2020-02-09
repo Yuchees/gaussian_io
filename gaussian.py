@@ -14,7 +14,15 @@ from .utils import coordinates_reader
 
 
 class GaussianIn(Header):
-    def __init__(self, in_lines):
+    """
+    Parser for Gaussian16 input file
+
+    Parameters
+    ----------
+    in_lines: list
+
+    """
+    def __init__(self, in_lines, name=None):
         header_lines = coord_lines = []
         for index, line in enumerate(in_lines):
             if line == '\n':
@@ -23,7 +31,7 @@ class GaussianIn(Header):
                 break
         super().__init__(header_lines)
         self._coord = coordinates_reader(coord_lines, ftype='xyz')
-        self._name = ''
+        self._name = name
 
     @property
     def coord(self):
@@ -40,30 +48,32 @@ class GaussianIn(Header):
         else:
             return True
 
-    def update_mol(self, mol_path):
+    def update_mol(self, mol):
         """
         Update the molecular geometry from the given file
 
         Parameters
         ----------
-        mol_path: str
-            The path of given molecular file
+        mol: str or list
+            The path of given molecular file or
+            a parsed coordinates list from GaussianOut
         Returns
         -------
         None
         """
-        path = Path(mol_path)
-        self._name = path.name
-        assert path.suffix in ['.xyz', '.mol', '.mol2'], ''
-        with open(path, 'r') as file:
-            mol_l = file.readlines()
-        if path.suffix is '.mol':
-            coord_lines = mol_l[2:]
-        elif path.suffix is '.mol2':
-            coord_lines = mol_l[:]
-        else:
-            coord_lines = mol_l[2:]
-        self._coord = coordinates_reader(coord_lines, ftype=path.suffix)
+        if isinstance(mol, str):
+            path = Path(mol)
+            self._name = path.name
+            assert path.suffix in ['.xyz', '.mol', '.mol2'], ''
+            with open(path, 'r') as file:
+                mol_l = file.readlines()
+            if path.suffix is '.mol2':
+                coord_lines = mol_l[9:]
+            else:
+                coord_lines = mol_l[2:]
+            self._coord = coordinates_reader(coord_lines, ftype=path.suffix)
+        elif isinstance(mol, list):
+            self._coord = mol
 
     def to_gjf(self, path=None):
         """
@@ -101,7 +111,6 @@ class GaussianIn(Header):
             return input_lines
         else:
             in_path = Path(path)
-            assert in_path.is_file(), 'Given path is not a file!'
             with open(in_path, 'w') as input_file:
                 input_file.writelines(input_lines)
 
@@ -109,7 +118,7 @@ class GaussianIn(Header):
 class GaussianOut:
     def __init__(self, out_lines, name):
         """
-        Class for reading all Gaussian out-put file details.
+        Parser for Gaussian16 output file
 
         :param out_lines: list of lines from the output file
         :param name: The name of read gaussian file
@@ -144,7 +153,7 @@ class GaussianOut:
             # If the file is a finished job and no error at the end.
             # Run the parser
             else:
-                self.parser()
+                self._parser()
 
     @property
     def cpu_time(self):
@@ -173,13 +182,13 @@ class GaussianOut:
     @property
     def sum_params(self):
         if not self._status['sum_reader']:
-            self.parser_sum()
+            self._parser_sum()
         return list(self._summary.keys())
 
     @property
     def coord(self):
         if not self._status['sum_reader']:
-            self.parser_sum()
+            self._parser_sum()
         return coordinates_reader(self._summary['coordinates'], ftype='xyz')
 
     def __str__(self):
@@ -193,7 +202,15 @@ class GaussianOut:
                                 minutes=time[2], seconds=time[3])
         return format_time
 
-    def parser(self):
+    @staticmethod
+    def _decider_parser(converge_lines):
+        decider = {}
+        for line in converge_lines:
+            seg = re.split(r'\s+', line.strip())
+            decider['{}_{}'.format(seg[0], seg[1])] = float(seg[2])
+        return decider
+
+    def _parser(self):
         """
         Parser the Header and time stamps section
 
@@ -274,7 +291,7 @@ class GaussianOut:
                 break
         self._header = Header(header_lines=header_lines)
 
-    def parser_sum(self):
+    def _parser_sum(self):
         """
         Parser the summary section
 
@@ -283,7 +300,7 @@ class GaussianOut:
         None
         """
         if self._status['parser']:
-            self.parser()
+            self._parser()
         assert not self.error, 'Error {} found! Cannot get summary.'.format(
             self.error
         )
@@ -313,19 +330,22 @@ class GaussianOut:
         coordinate_start, coordinate_end, energy = 0, 0, 0
         for index, line in enumerate(self._lines):
             if re.match(r' -+\n', line) and \
-                    re.search(r' +Input orientation:', self._lines[index - 4]):
+                    re.search(r' +Standard orientation:', self._lines[index - 4]):
                 coordinate_start = index + 1
             elif re.match(r' -+\n', line) and \
                     coordinate_start != 0 and coordinate_end == 0:
                 coordinate_end = index
             if re.match(r' SCF Done:', line):
                 energy = float(re.split(r'\s+', line.strip())[4])
-            if re.search(r'Converged?', line):
+            if re.search(r'Converged\?', line):
                 converge_lines = self._lines[index + 1: index + 5]
                 step_segments = dict(
-                    coord=self._lines[coordinate_start: coordinate_end],
+                    coord=coordinates_reader(
+                        self._lines[coordinate_start: coordinate_end],
+                        ftype='out'
+                    ),
                     energy=energy,
-                    converge=converge_lines
+                    converge=self._decider_parser(converge_lines)
                 )
                 coordinate_start = coordinate_end = 0
                 self._opt_steps.append(step_segments)
@@ -343,7 +363,7 @@ class GaussianOut:
         str
         """
         if not self._status['sum_reader']:
-            self.parser_sum()
+            self._parser_sum()
         if param is None:
             return self._summary
         else:
@@ -358,14 +378,13 @@ if __name__ == '__main__':
     from file_io import write_xyz
     with open('./test/D2_A18_pi1_An3.out', 'r') as out:
         lines = out.readlines()
-    test_out_file = GaussianOut(out_lines=lines, name='A2_pi4')
-    test_out_file.parser_sum()
-    test_out_file.parser_optimisation()
-    a = test_out_file.get_opt_step(step=2)
-    write_xyz(coord=test_out_file.coord,
+    output_test = GaussianOut(out_lines=lines, name='A2_pi4')
+    output_test.parser_optimisation()
+    a = output_test.get_opt_step(step=2)
+    write_xyz(coord=output_test.coord,
               xyz_path='./test/test.xyz', comments='test')
     with open('./test/A5_pi12.gjf', 'r') as gif_file:
         gif_lines = gif_file.readlines()
     h = GaussianIn(gif_lines)
     input_test = h.to_gjf()
-    print('Error type: ', test_out_file.error)
+    print('Error type: ', output_test.error)

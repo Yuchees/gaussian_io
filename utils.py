@@ -13,8 +13,11 @@ def coordinates_reader(line_list, ftype='out'):
         if item != '\n':
             segments = re.split(r',|\s+', item.strip())
             if ftype == 'out':
-                atom = period_table[segments[2]]
-                pos = list(map(float, segments[-4:-1]))
+                atom = period_table[segments[1]]
+                pos = list(map(float, segments[-3:]))
+            elif ftype == '.mol2':
+                atom = re.sub(r'[0-9]+', '', segments[1])
+                pos = list(map(float, segments[2:5]))
             else:
                 atom = segments[0]
                 pos = list(map(float, segments[-3:]))
