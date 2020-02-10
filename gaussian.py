@@ -376,14 +376,14 @@ class GaussianOut:
 if __name__ == '__main__':
     # Test script
     from file_io import write_xyz
-    with open('./test/D2_A18_pi1_An3.out', 'r') as out:
+    with open('./test/output_freq.out', 'r') as out:
         lines = out.readlines()
     output_test = GaussianOut(out_lines=lines, name='A2_pi4')
     output_test.parser_optimisation()
     a = output_test.get_opt_step(step=2)
     write_xyz(coord=output_test.coord,
               xyz_path='./test/test.xyz', comments='test')
-    with open('./test/A5_pi12.gjf', 'r') as gif_file:
+    with open('test/input_example.gjf', 'r') as gif_file:
         gif_lines = gif_file.readlines()
     h = GaussianIn(gif_lines)
     input_test = h.to_gjf()

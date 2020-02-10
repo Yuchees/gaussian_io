@@ -181,7 +181,7 @@ def files_redistribution(path):
 
 
 if __name__ == '__main__':
-    g16_in_test = read_in(path='test/header_PM7_IP_EA.gjf')
+    g16_in_test = read_in(path='test/header_link.gjf')
     g1 = g16_in_test[0]
     g1_gjf = g1.to_gjf()
     print('finished')

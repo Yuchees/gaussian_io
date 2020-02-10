@@ -91,7 +91,7 @@ class Header:
 
 
 if __name__ == '__main__':
-    with open('test/header_PM7_IP_EA.gjf', 'r') as file:
+    with open('test/header_link.gjf', 'r') as file:
         lines = file.readlines()
     h = Header(lines)
     d = h.get_header()
