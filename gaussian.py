@@ -65,10 +65,14 @@ class GaussianIn(Header):
             path = Path(mol)
             self._name = path.name
             assert path.suffix in ['.xyz', '.mol', '.mol2'], ''
+            coord_lines = []
             with open(path, 'r') as file:
                 mol_l = file.readlines()
             if path.suffix is '.mol2':
-                coord_lines = mol_l[9:]
+                for idx, line in enumerate(mol_l):
+                    if re.match(r' 1 [A-Z]', line):
+                        coord_lines = mol_l[idx:]
+                        break
             else:
                 coord_lines = mol_l[2:]
             self._coord = coordinates_reader(coord_lines, ftype=path.suffix)
@@ -329,8 +333,9 @@ class GaussianOut:
         """
         coordinate_start, coordinate_end, energy = 0, 0, 0
         for index, line in enumerate(self._lines):
-            if re.match(r' -+\n', line) and \
-                    re.search(r' +Standard orientation:', self._lines[index - 4]):
+            if re.match(r' -+\n', line) and re.search(
+                    r' +Standard orientation:', self._lines[index - 4]
+            ):
                 coordinate_start = index + 1
             elif re.match(r' -+\n', line) and \
                     coordinate_start != 0 and coordinate_end == 0:
