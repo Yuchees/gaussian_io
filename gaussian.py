@@ -10,7 +10,7 @@ from pathlib import Path
 from datetime import datetime, timedelta
 
 from .header import Header
-from .utils import coordinates_reader
+from .utils import coordinates_reader, PERIODIC_TABLE
 
 
 class GaussianIn(Header):
@@ -123,11 +123,6 @@ class GaussianOut:
     def __init__(self, out_lines, name):
         """
         Parser for Gaussian16 output file
-
-        :param out_lines: list of lines from the output file
-        :param name: The name of read gaussian file
-        :type out_lines: list
-        :type name: str
         """
         self._name = name
         self._lines = out_lines
@@ -185,13 +180,13 @@ class GaussianOut:
 
     @property
     def sum_params(self):
-        if not self._status['sum_reader']:
+        if not self._status['sum_reader'] and self.finished:
             self._parser_sum()
         return list(self._summary.keys())
 
     @property
     def coord(self):
-        if not self._status['sum_reader']:
+        if not self._status['sum_reader'] and self.finished:
             self._parser_sum()
         return coordinates_reader(self._summary['coordinates'], ftype='xyz')
 
@@ -211,16 +206,22 @@ class GaussianOut:
         decider = {}
         for line in converge_lines:
             seg = re.split(r'\s+', line.strip())
-            decider['{}_{}'.format(seg[0], seg[1])] = float(seg[2])
+            decider['{}_{}'.format(seg[0], seg[1])] = [float(seg[2]), seg[4]]
         return decider
+
+    @staticmethod
+    def _force_parser(line_list):
+        force = []
+        for item in line_list:
+            if item != '\n':
+                segments = re.split(r',|\s+', item.strip())
+                atom = PERIODIC_TABLE[int(segments[1])]
+                force.append([atom] + list(map(float, segments[-3:])))
+        return force
 
     def _parser(self):
         """
         Parser the Header and time stamps section
-
-        Returns
-        -------
-        None
         """
         assert self._status['finished'], 'Unfinished Gaussian out job.'
         # Determine header slice
@@ -270,10 +271,6 @@ class GaussianOut:
     def _parser_header(self):
         """
         Parser header lines to a Header object
-
-        Returns
-        -------
-        None
         """
         header_lines = []
         header_seg = 0
@@ -298,10 +295,6 @@ class GaussianOut:
     def _parser_sum(self):
         """
         Parser the summary section
-
-        Returns
-        -------
-        None
         """
         if self._status['parser']:
             self._parser()
@@ -326,20 +319,22 @@ class GaussianOut:
     def parser_optimisation(self):
         """
         Parser optimisation steps
-
-        Returns
-        -------
-        None
         """
         coordinate_start, coordinate_end, energy = 0, 0, 0
+        force_start, force_end = 0, 0
         for index, line in enumerate(self._lines):
             if re.match(r' -+\n', line) and re.search(
-                    r' +Standard orientation:', self._lines[index - 4]
+                    r' +Input orientation:', self._lines[index - 4]
             ):
                 coordinate_start = index + 1
             elif re.match(r' -+\n', line) and \
                     coordinate_start != 0 and coordinate_end == 0:
                 coordinate_end = index
+            if re.match(r' -+\n', line) and re.search(
+                    r' +Forces ', self._lines[index - 2]
+            ):
+                force_start = index + 1
+                force_end = force_start + (coordinate_end - coordinate_start)
             if re.match(r' SCF Done:', line):
                 energy = float(re.split(r'\s+', line.strip())[4])
             if re.search(r'Converged\?', line):
@@ -348,6 +343,9 @@ class GaussianOut:
                     coord=coordinates_reader(
                         self._lines[coordinate_start: coordinate_end],
                         ftype='out'
+                    ),
+                    force=self._force_parser(
+                        self._lines[force_start: force_end]
                     ),
                     energy=energy,
                     converge=self._decider_parser(converge_lines)
@@ -362,10 +360,10 @@ class GaussianOut:
         Parameters
         ----------
         param: str
-
+            Name of parameter
         Returns
         -------
-        str
+        summary: dict
         """
         if not self._status['sum_reader']:
             self._parser_sum()
@@ -375,21 +373,27 @@ class GaussianOut:
             return self._summary[param]
 
     def get_opt_step(self, step):
+        """
+        Get raw data of Coordinate, force, energy and converge
+
+        Parameters
+        ----------
+        step: int
+            Number of optimisation step
+
+        Returns
+        -------
+        opt: dict
+            Coordinate, force, energy and converge information
+        """
         return self._opt_steps[step]
 
 
 if __name__ == '__main__':
     # Test script
-    from file_io import write_xyz
-    with open('./test/output_freq.out', 'r') as out:
+    with open('./test/output_std.out', 'r') as out:
         lines = out.readlines()
     output_test = GaussianOut(out_lines=lines, name='A2_pi4')
     output_test.parser_optimisation()
-    a = output_test.get_opt_step(step=2)
-    write_xyz(coord=output_test.coord,
-              xyz_path='./test/test.xyz', comments='test')
-    with open('test/input_example.gjf', 'r') as gif_file:
-        gif_lines = gif_file.readlines()
-    h = GaussianIn(gif_lines)
-    input_test = h.to_gjf()
-    print('Error type: ', output_test.error)
+    a = output_test.get_opt_step(step=1)
+    print('')

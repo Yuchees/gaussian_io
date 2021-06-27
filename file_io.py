@@ -32,6 +32,9 @@ def read_out(path):
         'The given file is not an .out, got{} instead.'.format(out_path.suffix)
     with open(out_path, 'r') as output_file:
         lines = output_file.readlines()
+    return GaussianOut(out_lines=lines, name=out_path.stem)
+    # TODO: Unfinished link function
+    """
     link_id = []
     # Check if there are links in this out file
     for i, line in enumerate(lines):
@@ -54,7 +57,7 @@ def read_out(path):
                 GaussianOut(out_lines=lines[link_id[j]: link_id[j + 1]],
                             name=out_path.stem)
             )
-        return g16_out
+        return g16_out"""
 
 
 def read_in(path):
