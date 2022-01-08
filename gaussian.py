@@ -141,9 +141,10 @@ class GaussianOut:
         self._elapsed_time = timedelta()
         self._date = None
         # Initialise object, get error and completeness information
-        if not re.match(r' File| Normal', self._lines[-1]):
+        if len(self._lines) < 10 or \
+                not re.match(r' File| Normal', self._lines[-1]):
             self._status['finished'] = False
-            warnings.warn('Unfinished Gaussian job.', ResourceWarning)
+            warnings.warn('Unfinished Gaussian job.', UserWarning)
         else:
             error_line = self._lines[-4]
             if error_line.startswith(' Error termination'):
@@ -320,6 +321,8 @@ class GaussianOut:
         """
         Parser optimisation steps
         """
+        if not self.finished:
+            raise ValueError('Unfinished g16 job!')
         coordinate_start, coordinate_end, energy = 0, 0, 0
         force_start, force_end = 0, 0
         for index, line in enumerate(self._lines):
@@ -391,7 +394,7 @@ class GaussianOut:
 
 if __name__ == '__main__':
     # Test script
-    with open('./test/output_std.out', 'r') as out:
+    with open('./test/empty_out.out', 'r') as out:
         lines = out.readlines()
     output_test = GaussianOut(out_lines=lines, name='A2_pi4')
     output_test.parser_optimisation()
