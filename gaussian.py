@@ -68,7 +68,7 @@ class GaussianIn(Header):
             coord_lines = []
             with open(path, 'r') as file:
                 mol_l = file.readlines()
-            if path.suffix is '.mol2':
+            if path.suffix == '.mol2':
                 for idx, line in enumerate(mol_l):
                     if re.match(r' 1 [A-Z]', line):
                         coord_lines = mol_l[idx:]
