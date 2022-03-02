@@ -38,6 +38,3 @@ def coordinates_reader(line_list, ftype='out'):
             coordinates.append([atom] + pos)
     return coordinates
 
-
-if __name__ == '__main__':
-    pass

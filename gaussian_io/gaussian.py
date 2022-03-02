@@ -391,12 +391,3 @@ class GaussianOut:
         """
         return self._opt_steps[step]
 
-
-if __name__ == '__main__':
-    # Test script
-    with open('./test/empty_out.out', 'r') as out:
-        lines = out.readlines()
-    output_test = GaussianOut(out_lines=lines, name='A2_pi4')
-    output_test.parser_optimisation()
-    a = output_test.get_opt_step(step=1)
-    print('')
