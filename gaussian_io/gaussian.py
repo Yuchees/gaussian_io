@@ -64,7 +64,7 @@ class GaussianIn(Header):
         if isinstance(mol, str):
             path = Path(mol)
             self._name = path.name
-            assert path.suffix in ['.xyz', '.mol', '.mol2'], ''
+            assert path.suffix in ['.xyz', '.mol', '.mol2'], 'Given file is not recognised, got {}'.format(path.suffix)
             coord_lines = []
             with open(path, 'r') as file:
                 mol_l = file.readlines()
