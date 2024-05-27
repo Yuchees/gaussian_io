@@ -61,10 +61,11 @@ class GaussianIn(Header):
         -------
         None
         """
-        if isinstance(mol, str):
+        if isinstance(mol, (str, Path)):
             path = Path(mol)
             self._name = path.name
-            assert path.suffix in ['.xyz', '.mol', '.mol2'], 'Given file is not recognised, got {}'.format(path.suffix)
+            assert path.suffix in ['.xyz', '.mol', '.mol2'], \
+                f'Given file is not recognised, got {path.suffix}'
             coord_lines = []
             with open(path, 'r') as file:
                 mol_l = file.readlines()
@@ -245,7 +246,7 @@ class GaussianOut:
                 self._status['error_type']:
             len_time = 2
         for i in range(len(self._lines) - 1, 1, -1):
-            # Finding the cpu and elapsed time line
+            # Finding the cpu and elapsed timeline
             if self._lines[i].startswith(' Job cpu time:'):
                 self._cpu_time += self._time_compiler(self._lines[i])
                 self._elapsed_time += self._time_compiler(self._lines[i + 1])
@@ -390,4 +391,3 @@ class GaussianOut:
             Coordinate, force, energy and converge information
         """
         return self._opt_steps[step]
-
