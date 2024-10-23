@@ -103,12 +103,11 @@ class GaussianIn(Header):
         # G16 keywords geom ignore the given coordinates
         if not re.search(r'geom', sum_method, re.IGNORECASE):
             for segments in self._coord:
-                coordinate_line = '{}{:>20.10f}{:>20.10f}{:>20.10f}\n'.format(
-                    segments[0],
-                    segments[1],
-                    segments[2],
-                    segments[3]
-                )
+                atom_type, x, y, z = segments
+                coordinate_line = (f'{atom_type}'
+                                   f'{x:>{18-len(atom_type)}.8f}'
+                                   f'{y:>16.8f}'
+                                   f'{z:>16.8f}\n')
                 coord_lines.append(coordinate_line)
             input_lines += coord_lines
         input_lines.append('\n')

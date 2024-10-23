@@ -28,36 +28,9 @@ def read_out(path):
         An object or a list of objects if there are links in.
     """
     out_path = Path(path)
-    assert out_path.suffix == '.out', \
-        'The given file is not an .out, got{} instead.'.format(out_path.suffix)
     with open(out_path, 'r') as output_file:
         lines = output_file.readlines()
     return GaussianOut(out_lines=lines, name=out_path.stem)
-    # TODO: Unfinished link function
-    """
-    link_id = []
-    # Check if there are links in this out file
-    for i, line in enumerate(lines):
-        if line.startswith(' Initial command:'):
-            link_id.append(i)
-    link_id.append(len(lines))
-    # Return an object if no link in this file
-    if len(link_id) == 2:
-        return GaussianOut(out_lines=lines, name=out_path.stem)
-    # Return a list of object after splitting the out file
-    else:
-        warnings.warn(
-            'There are {} of links in this out-file, '
-            'return a list of GaussianOut objects'.format(len(link_id) - 1),
-            ResourceWarning
-        )
-        g16_out = []
-        for j in range(len(link_id) - 1):
-            g16_out.append(
-                GaussianOut(out_lines=lines[link_id[j]: link_id[j + 1]],
-                            name=out_path.stem)
-            )
-        return g16_out"""
 
 
 def read_in(path):
@@ -119,19 +92,15 @@ def write_in(gauss_in_list, path):
 
 
 def write_xyz(coord, xyz_path, comments):
-    coord_lines = []
-    for segments in coord:
-        coordinate_line = '{}{:>20.10f}{:>20.10f}{:>20.10f}\n'.format(
-            segments[0],
-            segments[1],
-            segments[2],
-            segments[3]
-        )
-        coord_lines.append(coordinate_line)
-    xyz_lines = ['{}\n'.format(len(coord)),
-                 '{}\n'.format(comments)] + coord_lines
     with open(xyz_path, 'w') as mol_file:
-        mol_file.writelines(xyz_lines)
+        mol_file.write(f"{len(coord)}\n")
+        mol_file.write(f"{comments}\n")
+        for segments in coord:
+            atom_type, x, y, z = segments
+            mol_file.write(f'{atom_type}'
+                           f'{x:>{18-len(atom_type)}.8f}'
+                           f'{y:>16.8f}'
+                           f'{z:>16.8f}\n')
 
 
 def files_distribution(path, number):
