@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Gaussian 16 files io for array job on barkla.
-@author: Yu Che
-"""
+"""Utilities for reading and writing Gaussian input/output files."""
+
 import os
 import re
 import shutil
@@ -15,19 +13,26 @@ from .gaussian import GaussianOut, GaussianIn
 
 def read_out(path):
     """
-    Reading the Gaussian out file to a GaussianOut object
+    Read a Gaussian ``.out`` file and return a parsed object.
 
     Parameters
     ----------
-    path: str
-        The path of given out file
+    path: str or Path
+        Path to the Gaussian output file.
 
     Returns
     -------
-    g16_out: GaussianOut or list of GaussianOut
-        An object or a list of objects if there are links in.
+    GaussianOut
+        Parsed Gaussian output object.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the specified file does not exist.
     """
     out_path = Path(path)
+    if not out_path.is_file():
+        raise FileNotFoundError(f'File {out_path} does not exist.')
     with open(out_path, 'r') as output_file:
         lines = output_file.readlines()
     return GaussianOut(out_lines=lines, name=out_path.stem)
@@ -35,26 +40,37 @@ def read_out(path):
 
 def read_in(path):
     """
-    Reading the Gaussian input file or a prepared header file to
-    GaussianIn object
+    Read a Gaussian input file (.gjf). Supports single or multi-link sections.
 
     Parameters
     ----------
-    path: str
-        The path of given input file
+    path : str or Path
+        Path to the Gaussian input file.
 
     Returns
     -------
-    g16_in: GaussianIn or list of GaussianIn
-        An object or a list of objects if there are links in.
+    GaussianIn or list of GaussianIn
+        Single parsed input object, or list if multiple link sections detected.
+
+    Raises
+    ------
+    ValueError
+        If the file extension is not .gjf.
+    FileNotFoundError
+        If the input file does not exist.
     """
     in_path = Path(path)
-    assert in_path.suffix == '.gjf', \
-        'Given file must be .gjf, got {} instead.'.format(in_path.suffix)
+    if in_path.suffix != '.gjf':
+        raise ValueError(
+            f'Given file must be .gjf, got {in_path.suffix} instead.'
+        )
+    if not in_path.is_file():
+        raise FileNotFoundError(f'Input file {in_path} does not exist.')
+
     with open(in_path, 'r') as input_file:
         lines = input_file.readlines()
     link_id = [0]
-    # Check if there are links in this input file
+    # Check if the file contains multiple link sections
     for i, line in enumerate(lines):
         if re.match(r'-+link1-+\n', line, re.IGNORECASE):
             link_id.append(i)
@@ -78,23 +94,53 @@ def read_in(path):
 
 
 def write_in(gauss_in_list, path):
+    """
+    Write one or more :class:`GaussianIn` objects to a ``.gjf`` file.
+
+       Parameters
+       ----------
+       gauss_in_list : GaussianIn or list[GaussianIn]
+           Object(s) to be written.
+       path : str or Path
+           Destination file path.
+       """
     in_path = Path(path)
-    assert in_path.is_file(), 'Given path is not a file!'
+    if in_path.suffix != '.gif':
+        raise ValueError(
+            f'Output path must be a .gjf file, got {in_path.suffix} instead.'
+        )
     input_lines = []
     if isinstance(gauss_in_list, list):
         for gauss in gauss_in_list:
             input_lines += gauss.to_gjf()
             input_lines.append('--Link1--\n')
-        with open(path, 'w') as input_file:
+        with open(in_path, 'w') as input_file:
             input_file.writelines(input_lines[:-1])
     elif isinstance(gauss_in_list, GaussianIn):
         gauss_in_list.to_gjf(path=in_path)
+    else:
+        raise TypeError(
+            "gauss_in_list must be a GaussianIn instance or a list thereof"
+        )
 
 
 def write_xyz(coord, xyz_path, comments):
+    """
+    Write atomic coordinates to an XYZ formatted file.
+
+    Parameters
+    ----------
+    coord : sequence of (str, float, float, float)
+        List of tuples: atomic symbol and x, y, z coordinates.
+    xyz_path : str or Path
+        Destination file path (.xyz).
+    comments : str, optional
+        Comment line to include after atom count.
+    """
+    xyz_path = Path(xyz_path)
     with open(xyz_path, 'w') as mol_file:
-        mol_file.write(f"{len(coord)}\n")
-        mol_file.write(f"{comments}\n")
+        mol_file.write(f'{len(coord)}\n')
+        mol_file.write(f'{comments}\n')
         for segments in coord:
             atom_type, x, y, z = segments
             mol_file.write(f'{atom_type}'
@@ -103,59 +149,61 @@ def write_xyz(coord, xyz_path, comments):
                            f'{z:>16.8f}\n')
 
 
-def files_distribution(path, number):
+def files_distribution(root, per_folder):
     """
-    Distributed files into sub folders that can be applied for array jobs on
-    barkla.
+    Distribute files from a directory into subfolders for array jobs.
 
     Parameters
     ----------
-    path: str or Path
-        The root folder
-    number: int
-        The number of files in each sub-folders
-    Returns
-    -------
-    None
+    root : str or Path
+        Root directory containing files to distribute.
+    per_folder : int
+        Maximum number of files per subfolder.
+
+    Raises
+    ------
+    TypeError
+        If root is not a valid path or per_folder is not positive.
     """
-    if isinstance(path, (Path, str)):
-        path = Path(path)
-    else:
-        raise TypeError('Given path {} is not a valid path str.'.format(path))
+    root = Path(root)
+    if not root.is_dir():
+        raise TypeError(f'Root path must be a directory: {root}')
+    if per_folder <= 0:
+        raise ValueError('per_folder must be a positive integer.')
     n, i = 0, 1
-    j = len(os.listdir(path)) % number
-    for file in path.iterdir():
-        sub_array_path = path / str(i)
+    j = len(os.listdir(root)) % per_folder
+    for file in root.iterdir():
+        sub_array_path = root / str(i)
         if not os.path.exists(sub_array_path):
             os.mkdir(sub_array_path)
         shutil.move(file, sub_array_path)
         n += 1
-        if (n == number and i != 1) or (n == (number + j) and i == 1):
+        if (n == per_folder and i != 1) or (n == (per_folder + j) and i == 1):
             n = 0
             i += 1
     print('Distributed into {} folders.'.format((i - 1)))
 
 
-def files_redistribution(path):
+def files_redistribution(root):
     """
-    Collecting all sub-folders files to their root folder.
+    Move files from all subdirectories back to the root directory.
 
     Parameters
     ----------
-    path: str or Path
-        The root folder
-    Returns
-    -------
-    None
+    root : str or Path
+        Root directory containing subfolders.
+
+    Raises
+    ------
+    TypeError
+        If root is not a valid path.
     """
-    if isinstance(path, (Path, str)):
-        path = Path(path)
-    else:
-        raise TypeError('Given path {} is not a valid path str.'.format(path))
-    for folder in os.listdir(path):
-        file_list = os.listdir(path / str(folder))
-        for file in file_list:
-            target_path = '{}/{}/{}'.format(path, folder, file)
-            shutil.move(target_path, path)
-        os.removedirs(path / str(folder))
-    print('Finished!')
+    root = Path(root)
+    if not root.is_dir():
+        raise TypeError(f'Root path must be a directory: {root}')
+
+    for folder in [f for f in root.iterdir() if f.is_dir()]:
+        for file in folder.iterdir():
+            shutil.move(str(file), root)
+        folder.rmdir()
+    print("Redistribution complete.")
